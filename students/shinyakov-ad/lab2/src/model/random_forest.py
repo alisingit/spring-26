@@ -11,8 +11,6 @@ from sklearn.tree import DecisionTreeRegressor
 @dataclass
 class TreeState:
     tree: DecisionTreeRegressor
-    feature_indices: np.ndarray
-    bootstrap_indices: np.ndarray
     oob_indices: np.ndarray
 
 
@@ -24,7 +22,6 @@ class RandomForestRegressorCustom(BaseEstimator, RegressorMixin):
         max_features: int | float | str | None = "sqrt",
         min_samples_split: int = 2,
         min_samples_leaf: int = 1,
-        bootstrap: bool = True,
         oob_score: bool = True,
         random_state: int | None = 42,
     ) -> None:
@@ -33,7 +30,6 @@ class RandomForestRegressorCustom(BaseEstimator, RegressorMixin):
         self.max_features = max_features
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
-        self.bootstrap = bootstrap
         self.oob_score = oob_score
         self.random_state = random_state
 
@@ -45,23 +41,22 @@ class RandomForestRegressorCustom(BaseEstimator, RegressorMixin):
         self._rng = np.random.default_rng(self.random_state)
         self.trees_: list[TreeState] = []
 
-        for tree_idx in range(self.n_estimators):
-            feature_indices = self._sample_features()
+        for i in range(self.n_estimators):
             bootstrap_indices, oob_indices = self._sample_rows(X.shape[0])
 
             tree = DecisionTreeRegressor(
                 max_depth=self.max_depth,
-                min_samples_split=self.min_samples_split,
                 min_samples_leaf=self.min_samples_leaf,
-                random_state=None if self.random_state is None else self.random_state + tree_idx,
+                min_samples_split=self.min_samples_split,
+                max_features=self.max_features,
+                random_state=None if self.random_state is None else self.random_state + i,
             )
-            tree.fit(X[bootstrap_indices][:, feature_indices], y[bootstrap_indices])
+            
+            tree.fit(X[bootstrap_indices], y[bootstrap_indices])
 
             self.trees_.append(
                 TreeState(
                     tree=tree,
-                    feature_indices=feature_indices,
-                    bootstrap_indices=bootstrap_indices,
                     oob_indices=oob_indices,
                 )
             )
@@ -80,7 +75,7 @@ class RandomForestRegressorCustom(BaseEstimator, RegressorMixin):
         X = np.asarray(X)
         predictions = np.column_stack(
             [
-                state.tree.predict(X[:, state.feature_indices])
+                state.tree.predict(X)
                 for state in self.trees_
             ]
         )
@@ -103,34 +98,12 @@ class RandomForestRegressorCustom(BaseEstimator, RegressorMixin):
 
         return importances
 
-    def _sample_features(self):
-        feature_count = self._resolve_max_features(self.n_features_in_)
-        return np.sort(self._rng.choice(self.n_features_in_, size=feature_count, replace=False))
-
     def _sample_rows(self, n_rows: int):
-        if not self.bootstrap:
-            bootstrap_indices = np.arange(n_rows)
-            oob_indices = np.array([], dtype=int)
-            return bootstrap_indices, oob_indices
-
         bootstrap_indices = self._rng.integers(0, n_rows, size=n_rows)
         in_bag_mask = np.zeros(n_rows, dtype=bool)
         in_bag_mask[bootstrap_indices] = True
         oob_indices = np.flatnonzero(~in_bag_mask)
         return bootstrap_indices, oob_indices
-
-    def _resolve_max_features(self, n_features: int):
-        if self.max_features is None:
-            return n_features
-        if self.max_features == "sqrt":
-            return max(1, int(np.sqrt(n_features)))
-        if self.max_features == "log2":
-            return max(1, int(np.log2(n_features)))
-        if isinstance(self.max_features, float):
-            return max(1, int(np.ceil(self.max_features * n_features)))
-        if isinstance(self.max_features, int):
-            return min(n_features, max(1, self.max_features))
-        raise ValueError(f"Unsupported max_features={self.max_features}")
 
     def _compute_oob_predictions(self, X):
         oob_sum = np.zeros(X.shape[0], dtype=float)
@@ -139,7 +112,7 @@ class RandomForestRegressorCustom(BaseEstimator, RegressorMixin):
         for state in self.trees_:
             if state.oob_indices.size == 0:
                 continue
-            preds = state.tree.predict(X[state.oob_indices][:, state.feature_indices])
+            preds = state.tree.predict(X[state.oob_indices])
             oob_sum[state.oob_indices] += preds
             oob_count[state.oob_indices] += 1
 
