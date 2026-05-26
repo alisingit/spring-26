@@ -2,7 +2,7 @@ import numpy as np
 
 
 class GaussianMixtureEM:
-    """Gaussian Mixture Model with full covariance matrices trained by EM."""
+    """Gaussian Mixture Model with full covariance matrices trained by EM"""
 
     def __init__(
         self,
@@ -11,13 +11,18 @@ class GaussianMixtureEM:
         tol: float = 1e-4,
         reg_covar: float = 1e-6,
         n_init: int = 5,
+        init_params: str = "kmeans++",
         random_state: int = 42,
     ) -> None:
+        if init_params not in {"kmeans++", "random"}:
+            raise ValueError("init_params must be 'kmeans++' or 'random'")
+
         self.n_components = n_components
         self.max_iter = max_iter
         self.tol = tol
         self.reg_covar = reg_covar
         self.n_init = n_init
+        self.init_params = init_params
         self.random_state = random_state
 
         self.weights_: np.ndarray | None = None
@@ -101,11 +106,21 @@ class GaussianMixtureEM:
         return -2.0 * np.sum(self.score_samples(x)) + self._n_parameters(x) * np.log(n_samples)
 
     def _initialize_parameters(self, x: np.ndarray, rng: np.random.Generator) -> None:
+        n_samples, n_features = x.shape
+
+        if self.init_params == "random":
+            indices = rng.choice(n_samples, self.n_components, replace=False)
+            self.means_ = x[indices].copy()
+            self.covariances_ = np.array(
+                [np.eye(n_features) + self.reg_covar * np.eye(n_features) for _ in range(self.n_components)]
+            )
+            self.weights_ = np.full(self.n_components, 1.0 / self.n_components)
+            return
+
         centers = self._run_kmeans(x, self._kmeans_plus_plus(x, rng))
         distances = np.sum((x[:, np.newaxis, :] - centers[np.newaxis, :, :]) ** 2, axis=2)
         assignments = np.argmin(distances, axis=1)
 
-        n_samples, n_features = x.shape
         global_covariance = np.cov(x, rowvar=False) + self.reg_covar * np.eye(n_features)
         weights = np.empty(self.n_components, dtype=float)
         means = np.empty((self.n_components, n_features), dtype=float)
