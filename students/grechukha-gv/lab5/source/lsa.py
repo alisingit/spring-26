@@ -3,7 +3,7 @@ from scipy import sparse
 
 
 class LatentSemanticAnalysis:
-    """Latent semantic model based on a truncated singular value decomposition."""
+    """Latent semantic model based on a truncated singular value decomposition"""
 
     def __init__(self, n_components: int = 50) -> None:
         self.n_components = n_components

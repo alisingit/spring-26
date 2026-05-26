@@ -18,8 +18,7 @@ from slim import SlimRecommender
 
 
 RANDOM_STATE = 42
-MAX_DOCUMENTS = 800
-MAX_FEATURES = 320
+MAX_FEATURES = 1000
 TEST_SIZE = 0.2
 N_COMPONENTS = 45
 NDCG_K = 10
@@ -40,8 +39,8 @@ def load_dataset() -> tuple[sparse.csr_matrix, np.ndarray, list[str], list[str]]
         shuffle=True,
         random_state=RANDOM_STATE,
     )
-    texts = dataset.data[:MAX_DOCUMENTS]
-    targets = dataset.target[:MAX_DOCUMENTS]
+    texts = dataset.data
+    targets = dataset.target
 
     vectorizer = TfidfVectorizer(
         max_features=MAX_FEATURES,
@@ -244,13 +243,13 @@ def plot_metric_comparison(results: pd.DataFrame) -> None:
 
     axes[0].bar(results["model"], results["rmse"], color=colors)
     axes[0].set_title("RMSE на скрытых TF-IDF значениях")
-    axes[0].set_ylabel("RMSE, меньше лучше")
+    axes[0].set_ylabel("RMSE")
     axes[0].tick_params(axis="x", rotation=15)
     axes[0].grid(axis="y", alpha=0.3)
 
     axes[1].bar(results["model"], results[f"ndcg@{NDCG_K}"], color=colors)
     axes[1].set_title(f"NDCG@{NDCG_K} для рекомендаций терминов")
-    axes[1].set_ylabel("NDCG, больше лучше")
+    axes[1].set_ylabel("NDCG")
     axes[1].tick_params(axis="x", rotation=15)
     axes[1].grid(axis="y", alpha=0.3)
 
@@ -301,6 +300,23 @@ def plot_slim_coefficients(fitted: dict[str, object]) -> None:
     plt.close()
 
 
+def plot_slim_convergence(fitted: dict[str, object]) -> None:
+    slim = fitted["Собственный SLIM"]
+    history = getattr(slim, "loss_history_", None)
+    if not history:
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(range(1, len(history) + 1), history, marker="o", color="#4C72B0")
+    ax.set_title("Сходимость собственного SLIM")
+    ax.set_xlabel("Итерация proximal gradient")
+    ax.set_ylabel("Значение целевой функции")
+    ax.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(ARTIFACTS_DIR / "slim_convergence.png", dpi=160)
+    plt.close()
+
+
 def plot_lsa_singular_values(fitted: dict[str, object]) -> None:
     custom = fitted["Собственная LSA"].singular_values_
     reference = fitted["sklearn TruncatedSVD"].singular_values_
@@ -326,6 +342,7 @@ def save_results(results: pd.DataFrame, fitted: dict[str, object]) -> None:
     plot_metric_comparison(results)
     plot_fit_time(results)
     plot_slim_coefficients(fitted)
+    plot_slim_convergence(fitted)
     plot_lsa_singular_values(fitted)
 
 

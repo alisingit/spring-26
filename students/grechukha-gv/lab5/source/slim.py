@@ -3,7 +3,7 @@ from scipy import sparse
 
 
 class SlimRecommender:
-    """Sparse Linear Method trained by projected proximal gradient descent."""
+    """Sparse Linear Method trained by projected proximal gradient descent"""
 
     def __init__(
         self,
