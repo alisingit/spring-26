@@ -17,7 +17,7 @@ class _TreeNode:
 
 
 class RegressionTree:
-    """Small CART-style regression tree for squared-error splits."""
+    """Small CART-style regression tree for squared-error splits"""
 
     def __init__(
         self,
@@ -159,16 +159,16 @@ class RegressionTree:
 
 
 class GradientBoostingBinaryClassifier:
-    """Gradient boosting for binary classification with logistic loss."""
+    """Gradient boosting for binary classification with logistic loss"""
 
     def __init__(
         self,
-        n_estimators: int = 80,
-        learning_rate: float = 0.1,
+        n_estimators: int = 100,
+        learning_rate: float = 0.15,
         max_depth: int = 3,
-        min_samples_split: int = 2,
+        min_samples_split: int = 8,
         min_samples_leaf: int = 5,
-        max_thresholds: int = 64,
+        max_thresholds: int = 48,
     ) -> None:
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate

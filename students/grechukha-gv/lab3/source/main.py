@@ -193,6 +193,71 @@ def plot_feature_importance(model: GradientBoostingBinaryClassifier, feature_nam
     plt.close()
 
 
+def format_metric(value: float, std: float | None = None) -> str:
+    if std is None:
+        return f"{value:.4f}"
+    return f"{value:.4f} ± {std:.4f}"
+
+
+def format_time(value: float, std: float | None = None) -> str:
+    if std is None:
+        return f"{value:.3f}"
+    return f"{value:.3f} ± {std:.3f}"
+
+
+def build_cv_summary_table(cv_summary: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, str]] = []
+    for model_name in ("Собственный GB", "sklearn GB"):
+        row = cv_summary.loc[model_name]
+        rows.append(
+            {
+                "Модель": model_name,
+                "Accuracy": format_metric(row[("accuracy", "mean")], row[("accuracy", "std")]),
+                "Precision": format_metric(row[("precision", "mean")], row[("precision", "std")]),
+                "Recall": format_metric(row[("recall", "mean")], row[("recall", "std")]),
+                "F1": format_metric(row[("f1", "mean")], row[("f1", "std")]),
+                "Fit time, sec": format_time(row[("fit_time_sec", "mean")], row[("fit_time_sec", "std")]),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def build_holdout_table(fitted_models: dict[str, dict]) -> pd.DataFrame:
+    rows: list[dict[str, str]] = []
+    for model_name in ("Собственный GB", "sklearn GB"):
+        result = fitted_models[model_name]
+        metrics = result["metrics"]
+        rows.append(
+            {
+                "Модель": model_name,
+                "Accuracy": format_metric(metrics["accuracy"]),
+                "Precision": format_metric(metrics["precision"]),
+                "Recall": format_metric(metrics["recall"]),
+                "F1": format_metric(metrics["f1"]),
+                "Fit time, sec": format_time(result["fit_time_sec"]),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def print_console_summary(
+    x: pd.DataFrame,
+    y: np.ndarray,
+    cv_summary: pd.DataFrame,
+    fitted_models: dict[str, dict],
+) -> None:
+    print("Сводка запуска lab3")
+    print(f"Датасет: Breast Cancer Wisconsin, объектов: {x.shape[0]}, признаков: {x.shape[1]}.")
+    print(f"Баланс классов: malignant=0: {int(np.sum(y == 0))}, benign=1: {int(np.sum(y == 1))}.")
+    print()
+    print("Cross-validation, mean ± std")
+    print(build_cv_summary_table(cv_summary).to_string(index=False))
+    print()
+    print("Holdout")
+    print(build_holdout_table(fitted_models).to_string(index=False))
+    print()
+
+
 def save_run_summary(
     x: pd.DataFrame,
     y: np.ndarray,
@@ -211,38 +276,30 @@ def save_run_summary(
         "|--------|----------|-----------|--------|----|---------------|",
     ]
 
-    for model_name in cv_summary.index:
-        row = cv_summary.loc[model_name]
+    for _, row in build_cv_summary_table(cv_summary).iterrows():
         lines.append(
-            "| {model} | {accuracy:.4f} ± {accuracy_std:.4f} | {precision:.4f} ± {precision_std:.4f} | "
-            "{recall:.4f} ± {recall_std:.4f} | {f1:.4f} ± {f1_std:.4f} | {time:.3f} ± {time_std:.3f} |".format(
-                model=model_name,
-                accuracy=row[("accuracy", "mean")],
-                accuracy_std=row[("accuracy", "std")],
-                precision=row[("precision", "mean")],
-                precision_std=row[("precision", "std")],
-                recall=row[("recall", "mean")],
-                recall_std=row[("recall", "std")],
-                f1=row[("f1", "mean")],
-                f1_std=row[("f1", "std")],
-                time=row[("fit_time_sec", "mean")],
-                time_std=row[("fit_time_sec", "std")],
+            "| {model} | {accuracy} | {precision} | {recall} | {f1} | {time} |".format(
+                model=row["Модель"],
+                accuracy=row["Accuracy"],
+                precision=row["Precision"],
+                recall=row["Recall"],
+                f1=row["F1"],
+                time=row["Fit time, sec"],
             )
         )
 
     lines.extend(["", "## Holdout", ""])
     lines.extend(["| Модель | Accuracy | Precision | Recall | F1 | Fit time, sec |", "|--------|----------|-----------|--------|----|---------------|"])
 
-    for model_name, result in fitted_models.items():
-        metrics = result["metrics"]
+    for _, row in build_holdout_table(fitted_models).iterrows():
         lines.append(
-            "| {model} | {accuracy:.4f} | {precision:.4f} | {recall:.4f} | {f1:.4f} | {time:.3f} |".format(
-                model=model_name,
-                accuracy=metrics["accuracy"],
-                precision=metrics["precision"],
-                recall=metrics["recall"],
-                f1=metrics["f1"],
-                time=result["fit_time_sec"],
+            "| {model} | {accuracy} | {precision} | {recall} | {f1} | {time} |".format(
+                model=row["Модель"],
+                accuracy=row["Accuracy"],
+                precision=row["Precision"],
+                recall=row["Recall"],
+                f1=row["F1"],
+                time=row["Fit time, sec"],
             )
         )
 
@@ -261,7 +318,7 @@ def main() -> None:
     plot_feature_importance(fitted_models["Собственный GB"]["model"], list(x.columns))
     save_run_summary(x, y, cv_summary, fitted_models)
 
-    print((ARTIFACTS_DIR / "run_summary.md").read_text(encoding="utf-8"))
+    print_console_summary(x, y, cv_summary, fitted_models)
 
 
 if __name__ == "__main__":
